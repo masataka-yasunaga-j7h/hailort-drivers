@@ -17,3 +17,5 @@ linux/*/oe-logs
 win/x64
 win/driver/x64
 win/test/x64
+
+hailo10h_fw_5.3.0/

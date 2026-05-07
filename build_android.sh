@@ -87,11 +87,59 @@ build_hailo_driver() {
     echo "====================================================="
     echo " 次のステップ: デバイスへの展開"
     echo "====================================================="
+    echo " # 1. ドライバのプッシュ"
     echo " adb root && adb remount"
     echo " adb shell 'mkdir -p /vendor/lib/modules/hailo'"
     echo " adb push ${DRIVER_DIR}/build/release/arm64/hailo1x_pci.ko /vendor/lib/modules/hailo/"
+    echo ""
+    echo " # 2. Hailo10H ファームウェアのプッシュ (hailo10h_fw_5.3.0/)"
+    echo " adb shell 'mkdir -p /vendor/etc/firmware/hailo/hailo10h'"
+    echo " adb push ${SCRIPT_DIR}/hailo10h_fw_5.3.0/. /vendor/etc/firmware/hailo/hailo10h/"
+    echo ""
+    echo " # 3. ドライバのロード"
     echo " adb shell 'insmod /vendor/lib/modules/hailo/hailo1x_pci.ko'"
+    echo ""
+    echo " # または自動起動設定"
+    echo " adb shell \"echo 'insmod /vendor/lib/modules/hailo/hailo1x_pci.ko' >> /vendor/etc/init.insmod.cfg\""
+    echo "======================================================"
+    echo " ※ './build_android.sh deploy' で上記 adb コマンドを自動実行できます"
     echo "====================================================="
+}
+
+# ==============================
+# デバイスへの展開 (adb)
+# ==============================
+deploy_to_device() {
+    local fw_dir="${SCRIPT_DIR}/hailo10h_fw_5.3.0"
+    local ko_file="${DRIVER_DIR}/build/release/arm64/hailo1x_pci.ko"
+
+    if [ ! -f "${ko_file}" ]; then
+        echo "[ERROR] .ko ファイルが見つかりません。先に './build_android.sh driver' を実行してください"
+        exit 1
+    fi
+    if [ ! -d "${fw_dir}" ]; then
+        echo "[ERROR] ファームウェアディレクトリが見つかりません: ${fw_dir}"
+        echo "[ERROR] 先に ./download_firmware_hailo10h.sh を実行してください"
+        exit 1
+    fi
+
+    echo "[INFO] adb root && adb remount ..."
+    adb root
+    adb remount
+
+    echo "[INFO] ドライバをプッシュ中..."
+    adb shell "mkdir -p /vendor/lib/modules/hailo"
+    adb push "${ko_file}" /vendor/lib/modules/hailo/
+
+    echo "[INFO] Hailo10H ファームウェアをプッシュ中..."
+    adb shell "mkdir -p /vendor/etc/firmware/hailo/hailo10h"
+    adb push "${fw_dir}/." /vendor/etc/firmware/hailo/hailo10h/
+
+    echo "[INFO] ドライバをロード中..."
+    adb shell "insmod /vendor/lib/modules/hailo/hailo1x_pci.ko"
+
+    echo ""
+    echo "[SUCCESS] デバイスへの展開完了!"
 }
 
 # ==============================
@@ -134,12 +182,16 @@ case "${1:-all}" in
     clean)
         clean_all
         ;;
+    deploy)
+        deploy_to_device
+        ;;
     *)
-        echo "使い方: $0 [all|kernel|driver|clean]"
+        echo "使い方: $0 [all|kernel|driver|clean|deploy]"
         echo "  all    : カーネルソース取得 + ヘッダ準備 + ドライバビルド (デフォルト)"
         echo "  kernel : カーネルソース取得とヘッダ準備のみ"
         echo "  driver : ドライバビルドのみ (カーネルヘッダ準備済みの場合)"
         echo "  clean  : ドライバのビルド成果物を削除"
+        echo "  deploy : adb でデバイスにドライバとファームウェアを展開"
         exit 1
         ;;
 esac
